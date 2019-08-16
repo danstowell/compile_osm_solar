@@ -18,3 +18,5 @@ Requirements:
    * scipy
 * [osmium](https://osmcode.org/osmium-tool/)
 
+I use data extract downloads [from Geofabrik](http://download.geofabrik.de/europe/great-britain.html).
+
