@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 ############################################
 # User configuration:
 
-osmsourcefpath = os.path.expanduser('~/osm/solarsearch/gb-solarextracts/gb-190814-solar-withreferenced.xml')
+osmsourcefpath = os.path.expanduser('~/osm/solarsearch/gb-solarextracts/gb-191001-solar-withreferenced.xml')
 
 
 ############################################
@@ -55,6 +55,13 @@ compasspoints = {
 	'WNW': 292.2,
 	'NW':  315,
 	'NNW': 337.5,
+	# unconventional but seen in data:
+	'EAST':    90,
+	'SOUTH_EAST':    135,
+	'SOUTH':  180,
+	'SOUTH_WEST':    225,
+	'WEST':   270,
+	'NORTH_WEST':   315,
 }
 
 ##############################################################################
@@ -134,7 +141,10 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 				datacacheitem['calc_area'] = curitem['calc_area']
 
 			elif curitem['objtype']=='relation':
-				pass # nothing to do here, since all the relationship-handling comes at the end in postprocess()
+				datacacheitem['relations'] = curitem['relations']
+				datacacheitem['ways'] = curitem['ways']
+				datacacheitem['calc_area'] = 0
+				# NB most of the relationship-handling comes at the end in postprocess()
 
 			####################################
 			# Processing tags to log a PV object
@@ -185,7 +195,7 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 						else:
 							ok = False
 					elif k in ['direction', 'generator:orientation', 'orientation']:
-						v = v.replace('`', '')  # some people write it this way
+						v = v.replace('`', '').upper()  # some people write it this way
 						if v in compasspoints:
 							curitem['orientation'] = compasspoints[v]
 						elif v in ['ESW']:
@@ -365,12 +375,14 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 		"""Pushes down through relations' members, for two reasons: to compile their areas onto the parent, and to propagate the parent plant reference down to all.
 		You will call it with curitem==plantitem for plants, and plantitem=None for gens; then the recursion keeps plantitem fixed and alters the immediate curitem."""
 		# first we recurse into the child relations - the ways and rels will then add their area to our plantitem
-		for childid in curitem['relations']:
-			therel = self.reldata[childid]
+		#print("")
+		#print("_recurse_relation_info(curitem=%s, plantitem=%s, plantref=%s)"  % (curitem, plantitem, plantref))
+		for childinfo in curitem['relations']:
+			therel = self.reldata[childinfo['ref']]
 			if 'plantref' in therel:
 				raise ValueError("Suspicious recursion: while analysing a plant relation (%i) we found a child rel (%i) which already has plantref set: %s" % (plantitem['id'], childid, str(therel['plantref'])))
 			else:
-				self._recurse_relation_info(therel, plantitem, planref)
+				self._recurse_relation_info(therel, plantitem, plantref)
 		# now we grab all area info from one-level-down, and also push the plantref down one level
 		latslist = []
 		lonslist = []
@@ -437,6 +449,12 @@ print("   %i ways"  % len([_ for _ in handler.objs if _['objtype']=='way']))
 print("   %i relations"  % len([_ for _ in handler.objs if _['objtype']=='relation']))
 
 
+# collect the unique REPD identifiers
+repds_used = []
+for item in handler.objs:
+	if item.get('tag_repd:id', False):
+		repds_used.extend(item['tag_repd:id'].split(';'))
+
 for (readable, subset) in [
 	("standalone",    [_ for _ in handler.objs if _['tag_power']=='generator' and not _.get('plantref', None)]),
 	("within a farm", [_ for _ in handler.objs if _['tag_power']=='generator' and     _.get('plantref', None)]),
@@ -451,6 +469,8 @@ for (readable, subset) in [
 	print("   %i areas > 2000 sqm (could presume 'solar farm')"                               % len([_ for _ in subset if    _['calc_area']>2000]))
 print("Solar PV farm items (power=plant):")
 print("   %i in total"                                                                    % len([_ for _ in handler.objs if _['tag_power']=='plant']))
+print("   %i have REPD identifier tagged"                                                 % len([_ for _ in handler.objs if _['tag_power']=='plant' and _.get('tag_repd:id', False)]))
+print("        (%i REPD identifiers encountered)"                                         % len(repds_used))
 print("   %g sq km total surface area"  % (1e-6 * np.sum([_['calc_area']                           for _ in handler.objs if _['tag_power']=='plant'])))
 print("   %g MW total generating capacity"  % (1e-3 * np.sum([_.get('calc_capacity',0)             for _ in handler.objs if _['tag_power']=='plant'])))
 print("   %i nodes with no sqm tagged (needs more tagging)"                               % len([_ for _ in handler.objs if _['tag_power']=='plant' and    _['calc_area']==0]))
@@ -480,6 +500,7 @@ df = pd.DataFrame({anattrib:[obj.get(anattrib, '') for obj in handler.objs] for 
 
 pdf = PdfPages("plot_processed_PV_objects.pdf")
 
+# plots of the surface areas (sizes) of the objects
 if True:
 	fig, ax = plt.subplots(figsize=(10, 6))
 	ax.set_xscale("log")
@@ -488,9 +509,9 @@ if True:
 	plt.ylabel('Latitude')
 	plt.xlabel('Calculated size of PV object (sq m)')
 	plt.title("Sizes of solar PV objects in OSM (UK). Count=%i" % (len(df)))
-plt.savefig("plot_processed_PV_objects_arealat.png")
-pdf.savefig(fig)
-plt.close()
+	plt.savefig("plot_processed_PV_objects_arealat.png")
+	pdf.savefig(fig)
+	plt.close()
 
 if True:
 	fig, ax = plt.subplots(figsize=(10, 6))
@@ -503,11 +524,56 @@ if True:
 	plt.ylabel('# objects')
 	plt.xlabel('Calculated size of PV object (sq m)')
 	plt.title("Sizes of solar PV objects in OSM (UK). Count=%i" % (len(df)))
-plt.savefig("plot_processed_PV_objects_areahisto.png")
-pdf.savefig(fig)
-plt.close()
+	plt.savefig("plot_processed_PV_objects_areahisto.png")
+	pdf.savefig(fig)
+	plt.close()
 
-# TODO: Plot, for the larger farms at least, the correlation between the surface area of the panels and the tagged power output. Check outliers.
+# Plot, for the larger farms at least, the correlation between the surface area of the panels and the tagged power output. Check outliers.
+if True:
+	for (readable, subset) in [
+		("standalone", df.loc[(df['tag_power']=='generator') & (df['plantref']=='') & df['calc_capacity']>0]),
+		("solarfarm",  df.loc[(df['tag_power']=='plant')     & (df['plantref']!='') & df['calc_capacity']>0]),
+		]:
+		fig, ax = plt.subplots(figsize=(10, 6))
+		#ax.set_xscale("log")
+		#ax.set_yscale("log")
+		plt.scatter(subset['calc_area'], subset['calc_capacity'], marker='+', alpha=0.4)
+
+		for _, row in subset.iterrows():
+			ax.annotate('%s' % row['id'], xy=(row['calc_area'], row['calc_capacity']), textcoords='data', alpha=0.1)
+
+		plt.xlim(1, 1000000)
+		plt.ylabel('Tagged capacity')
+		plt.xlabel('Calculated size of PV object (sq m)')
+		plt.title("%s: calculated size vs tagged capacity in OSM (UK). Count=%i" % (readable, len(subset)))
+		plt.savefig("plot_processed_PV_objects_areacap_%s.png" % readable)
+		pdf.savefig(fig)
+		plt.close()
+
+
+
+#print(df['plantref']=='')
+
+# just lat-lon plots
+if True:
+	for (readable, subset) in [
+		("solarfarm",  df.loc[(df['tag_power']=='plant')     & (df['plantref']!='')]),
+		("standalone", df.loc[(df['tag_power']=='generator') & (df['plantref']=='')]),
+		("standalone_node", df.loc[(df['tag_power']=='generator') & (df['plantref']=='') & (df['calc_area']==0)]),
+		("standalone_area", df.loc[(df['tag_power']=='generator') & (df['plantref']=='') & (df['calc_area']>0)]),
+		]:
+
+		fig, ax = plt.subplots(figsize=(6, 10))
+		plt.scatter(subset['lon'], subset['lat'], marker='+', alpha=0.4)
+		plt.ylabel('Longitude')
+		plt.xlabel('Latitude')
+		plt.xlim(-6, 2)
+		plt.ylim(50, 58)
+		plt.title("Locations of %s PV objects in OSM (UK). Count=%i" % (readable, len(subset)))
+		plt.savefig("plot_processed_PV_objects_latlon_%s.png" % readable)
+		pdf.savefig(fig)
+		plt.close()
+
 
 
 pdf.close()
