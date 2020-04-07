@@ -3,7 +3,7 @@
 # Script to parse an OSM XML extract for solar PV data.
 # The extract must ALREADY have been processed by osmium to filter down to just the generator:method=photovoltaic items.
 # Here's what I do:
-# osmium tags-filter ~/osm/great-britain/great-britain-190802.osm.pbf generator:method=photovoltaic plant:method=photovoltaic plant:source=solar -o  ~/osm/solarsearch/gb-solarextracts/gb-190802-solar-withreferenced.xml
+# osmium tags-filter ~/osm/great-britain/great-britain-200202.osm.pbf generator:method=photovoltaic plant:method=photovoltaic plant:source=solar -o  ~/osm/solarsearch/gb-solarextracts/gb-200202-solar-withreferenced.xml
 
 import os, sys, csv
 from functools import reduce
@@ -22,7 +22,7 @@ from sklearn import linear_model
 ############################################
 # User configuration:
 
-osmsourcefpath = os.path.expanduser('~/osm/solarsearch/gb-solarextracts/gb-191001-solar-withreferenced.xml')
+osmsourcefpath = os.path.expanduser('~/osm/solarsearch/gb-solarextracts/gb-200402-solar-withreferenced.xml')
 
 
 ############################################
@@ -466,11 +466,12 @@ osmtotalobjs = len(handler.objs)
 print("")
 print("####################################################################")
 print(os.path.basename(osmsourcefpath))
-print("parsed %i OSM objects" % osmtotalobjs)
-
-print("   %i nodes" % len([_ for _ in handler.objs if _['objtype']=='node']))
-print("   %i ways"  % len([_ for _ in handler.objs if _['objtype']=='way']))
-print("   %i relations"  % len([_ for _ in handler.objs if _['objtype']=='relation']))
+print("parsed %i OSM objects (%i nodes, %i ways, %i relations)" % (osmtotalobjs,
+	len([_ for _ in handler.objs if _['objtype']=='node']),
+	len([_ for _ in handler.objs if _['objtype']=='way']),
+	len([_ for _ in handler.objs if _['objtype']=='relation'])
+	))
+print("")
 
 
 # collect the unique REPD identifiers
@@ -479,18 +480,27 @@ for item in handler.objs:
 	if item.get('tag_repd:id', False):
 		repds_used.extend(item['tag_repd:id'].split(';'))
 
-for (readable, subset) in [
-	("standalone",    [_ for _ in handler.objs if _['tag_power']=='generator' and not _.get('plantref', None)]),
-	("within a farm", [_ for _ in handler.objs if _['tag_power']=='generator' and     _.get('plantref', None)]),
-	]:
-	print("Solar PV panel items (power=generator) (%s):" % readable)
-	print("   %i in total"                                                                    % len([_ for _ in subset]))
-	print("   %g sq km total surface area"  % (1e-6 * np.sum([_['calc_area']                           for _ in subset])))
-	#print("   %g MW total generating capacity"  % (1e-3 * np.sum([_.get('calc_capacity', 0)            for _ in subset])))
-	print("   %i nodes with no sqm tagged (could presume 'domestic', but needs more tagging)" % len([_ for _ in subset if    _['calc_area']==0]))
-	print("   %i areas <= 30 sqm (could presume 'domestic') - not including nodes"            % len([_ for _ in subset if  0<_['calc_area']<=30]))
-	print("   %i areas 30--2000 sqm (could presume 'commercial' or part of array)"            % len([_ for _ in subset if 30<_['calc_area']<=2000]))
-	print("   %i areas > 2000 sqm (could presume 'solar farm')"                               % len([_ for _ in subset if    _['calc_area']>2000]))
+readable = "standalone"
+subset = [_ for _ in handler.objs if _['tag_power']=='generator' and not _.get('plantref', None)]
+print("Solar PV panel items (power=generator) (%s):" % readable)
+print("   %i in total"                                                                    % len([_ for _ in subset]))
+print("   %g sq km total surface area"  % (1e-6 * np.sum([_['calc_area']                           for _ in subset])))
+print("   %g MW total generating capacity (NB metadata will be v incomplete for this)" % (1e-3 * np.sum([_.get('calc_capacity',0)             for _ in subset])))
+print("   %i nodes with no sqm tagged (could presume 'domestic', but needs more tagging)" % len([_ for _ in subset if    _['calc_area']==0]))
+print("   %i areas <= 30 sqm (could presume 'domestic')"                                  % len([_ for _ in subset if  0<_['calc_area']<=30]))
+print("   %i areas 30--2000 sqm (could presume 'commercial' or part of array)"            % len([_ for _ in subset if 30<_['calc_area']<=2000]))
+print("   %i areas > 2000 sqm (inspect to see if should really be tagged 'solar farm')"   % len([_ for _ in subset if    _['calc_area']>2000]))
+
+readable = "within a farm"
+subset = [_ for _ in handler.objs if _['tag_power']=='generator' and     _.get('plantref', None)]
+print("Solar PV panel items (power=generator) (%s):" % readable)
+print("   %i in total"                                                                    % len([_ for _ in subset]))
+print("   %g sq km total surface area"  % (1e-6 * np.sum([_['calc_area']                           for _ in subset])))
+print("   %i nodes with no sqm tagged"                                                    % len([_ for _ in subset if    _['calc_area']==0]))
+print("   %i areas <= 30 sqm"                                                             % len([_ for _ in subset if  0<_['calc_area']<=30]))
+print("   %i areas 30--2000 sqm"                                                          % len([_ for _ in subset if 30<_['calc_area']<=2000]))
+print("   %i areas > 2000 sqm (inspect to see if should really be tagged 'solar farm')"   % len([_ for _ in subset if    _['calc_area']>2000]))
+
 print("Solar PV farm items (power=plant):")
 print("   %i in total"                                                                    % len([_ for _ in handler.objs if _['tag_power']=='plant']))
 print("   %i have REPD identifier tagged"                                                 % len([_ for _ in handler.objs if _['tag_power']=='plant' and _.get('tag_repd:id', False)]))
@@ -525,7 +535,7 @@ df = pd.DataFrame({anattrib:[obj.get(anattrib, '') for obj in handler.objs] for 
 pdf = PdfPages("plot_processed_PV_objects.pdf")
 
 # plots of the surface areas (sizes) of the objects
-if True:
+if False:
 	fig, ax = plt.subplots(figsize=(10, 6))
 	ax.set_xscale("log")
 	plt.scatter(df['calc_area'], df['lat'], marker='+', alpha=0.4)
@@ -546,7 +556,7 @@ if True:
 	plotnotches = notches[::8]
 	plt.xticks(plotnotches, map(int, plotnotches)) #, rotation=90)
 	plt.ylabel('# objects')
-	plt.xlabel('Calculated size of PV object (sq m)')
+	plt.xlabel('Calculated surface area of PV object (sq m)')
 	plt.title("Sizes of solar PV objects in OSM (UK). Count=%i" % (len(df)))
 	plt.savefig("plot_processed_PV_objects_areahisto.png")
 	pdf.savefig(fig)
