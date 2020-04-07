@@ -38,6 +38,13 @@ def PolyArea(x,y):
 	"Calculate area of a polygon from its coordinates (shoelace formula)"
 	return 0.5*np.abs(np.dot(x,np.roll(y,1))-np.dot(y,np.roll(x,1)))  # https://stackoverflow.com/questions/24467972/calculate-area-of-polygon-given-x-y-coordinates
 
+def guess_kilowattage(anobj):
+	"This should NOT NORMALLY BE USED since it is really only a rule of thumb."
+	if not anobj['calc_area']:
+		return 1.
+	else:
+		return anobj['calc_area'] * 0.15
+
 compasspoints = {
 	'N':     0,
 	'NNE':  22.5,
@@ -56,11 +63,18 @@ compasspoints = {
 	'NW':  315,
 	'NNW': 337.5,
 	# unconventional but seen in data:
+	'NORTH':   0,
+	'NORTHEAST':   45,
+	'NORTH_EAST':   45,
+	'EAS':    90,                   # TEMPORARY fix for wonky entry
 	'EAST':    90,
+	'SOUTHEAST':    135,
 	'SOUTH_EAST':    135,
 	'SOUTH':  180,
+	'SOUTHWEST':    225,
 	'SOUTH_WEST':    225,
 	'WEST':   270,
+	'NORTHWEST':   315,
 	'NORTH_WEST':   315,
 }
 
@@ -200,6 +214,8 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 							curitem['orientation'] = compasspoints[v]
 						elif v in ['ESW']:
 							pass # uninterpretable case seen in data... so skip
+						elif v in ['FLAT']:
+							pass # flat-mounted items have no orientation
 						else:
 							curitem['orientation'] = int(v) # NB there could of course be parse failures here
 					elif k=='pv_module_array':
@@ -356,6 +372,7 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 				curitem['calc_area'] = 0
 				self._recurse_relation_info(curitem, plantitem, plantref)
 				rels_postprocessed += 1
+
 		print("Postprocessed %i power=* relations" % rels_postprocessed)
 		print("Plant outlines for geo containment search: %i" % len(self.plantoutlines))
 		print("Building spatial query database")
@@ -369,6 +386,11 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 						if self.plantoutlines[arrayposition]['outlinepath'].contains_point([curitem['lat'], curitem['lon']]):
 							curitem['plantref'] = self.plantoutlines[arrayposition]['plantref']
 							#print("       spatially inferred generator %s/%s belongs to plant %s" % (curitem['objtype'], curitem['id'], curitem['plantref']))
+
+		if False: # This should NOT NORMALLY be activated. It inserts "guesstimate" power capacities for small-scale solar PV
+			for curitem in self.objs:
+				if curitem['tag_power']=='generator' and curitem.get('calc_capacity', 0)==0 and not curitem.get('plantref', None):
+					curitem['calc_capacity'] = guess_kilowattage(curitem)
 
 
 	def _recurse_relation_info(self, curitem, plantitem, plantref):
