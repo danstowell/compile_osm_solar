@@ -17,6 +17,8 @@ import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 
+from sklearn import linear_model
+
 ############################################
 # User configuration:
 
@@ -559,7 +561,15 @@ if True:
 		fig, ax = plt.subplots(figsize=(10, 6))
 		#ax.set_xscale("log")
 		#ax.set_yscale("log")
+
+		# linear regression
+		regr = linear_model.LinearRegression(fit_intercept=False) # force line to pass through zero
+		areadata_toregress = np.array(subset['calc_area']).reshape(-1, 1)
+		regr.fit(areadata_toregress, subset['calc_capacity'])
+		linregpredict = regr.predict(areadata_toregress)
+		plt.plot(sorted(subset['calc_area']), sorted(linregpredict), 'b-', alpha=0.4)
 		plt.scatter(subset['calc_area'], subset['calc_capacity'], marker='+', alpha=0.4)
+		plt.annotate("Slope: %f W / sq m" % (regr.coef_[0] * 1000), xy=(0.8, 0.1), xycoords='axes fraction', color=(0.5, 0.5, 0.5))
 
 		for _, row in subset.iterrows():
 			ax.annotate('%s' % row['id'], xy=(row['calc_area'], row['calc_capacity']), textcoords='data', alpha=0.1)
