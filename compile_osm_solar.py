@@ -549,6 +549,21 @@ if False:
 
 if True:
 	fig, ax = plt.subplots(figsize=(10, 6))
+	notches = np.geomspace(1, 1e3, 49)
+	plt.hist(df['calc_capacity'], bins=(notches))
+	ax.set_xscale("log")
+	#ax.set_yscale("log")
+	plotnotches = notches[::8]
+	#plt.xticks(plotnotches, map(int, plotnotches)) #, rotation=90)
+	plt.ylabel('# objects')
+	plt.xlabel('Calculated capacity of PV object (KW)')
+	plt.title("Capacities of solar PV objects in OSM (UK). Count=%i" % (len(df)))
+	plt.savefig("plot_processed_PV_objects_capacityhisto.png")
+	pdf.savefig(fig)
+	plt.close()
+
+if True:
+	fig, ax = plt.subplots(figsize=(10, 6))
 	notches = np.geomspace(1, 1e6, 49)
 	plt.hist(df['calc_area'], bins=(np.hstack(([0], notches))))
 	ax.set_xscale("log")
