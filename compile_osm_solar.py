@@ -5,7 +5,7 @@
 # Here's what I do:
 # osmium tags-filter ~/osm/great-britain/great-britain-200202.osm.pbf generator:method=photovoltaic plant:method=photovoltaic plant:source=solar -o  ~/osm/solarsearch/gb-solarextracts/gb-200202-solar-withreferenced.xml
 
-import os, sys, csv
+import os, sys, csv, subprocess
 from functools import reduce
 from xml import sax
 import numpy as np
@@ -22,7 +22,11 @@ from sklearn import linear_model
 ############################################
 # User configuration:
 
-osmsourcefpath = os.path.expanduser('~/osm/solarsearch/gb-solarextracts/gb-200402-solar-withreferenced.xml')
+do_osmium = True   # if False, it won't try to filter the input OSM file
+osmsourcefpath = os.path.expanduser('~/osm/great-britain/great-britain-200414.osm.pbf')
+# This is what I used before I folded the osmium command directly into the script:
+# do_osmium = False
+# osmsourcefpath = os.path.expanduser('~/osm/solarsearch/gb-solarextracts/gb-200402-solar-withreferenced.xml')
 
 
 ############################################
@@ -432,11 +436,18 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 
 ##############
 # let's go!
-with open(osmsourcefpath, 'rb') as infp:
-	parser = sax.make_parser()
-	handler = SolarXMLHandler()
-	parser.setContentHandler(handler)
-	parser.parse(infp)
+
+if do_osmium:
+	infp = subprocess.Popen(["osmium", "tags-filter", osmsourcefpath, "generator:method=photovoltaic", "plant:method=photovoltaic", "plant:source=solar", "-o", "-", "-f", "xml"],
+			stdout=subprocess.PIPE).stdout
+else:
+	infp = open(osmsourcefpath, 'rb')
+
+parser = sax.make_parser()
+handler = SolarXMLHandler()
+parser.setContentHandler(handler)
+parser.parse(infp)
+infp.close()
 handler.postprocess()
 
 # find all attribs in use
