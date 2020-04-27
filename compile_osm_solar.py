@@ -537,11 +537,12 @@ with open("compile_processed_PV_objects.csv", 'w') as outfp:
 		outfp.write(",".join(map(str, [csvformatspecialfields(anattrib, obj.get(anattrib, '')) for anattrib in allattribs])) + "\n")
 
 ############################################################################################################
-# TODO produce histogram of areas, and capacities; show stacked bar charts broken down by calc_type
+# produce histogram of areas, and capacities; show stacked bar charts broken down by calc_type
 #   my simple scatter plot of latitude versus log(sqm) is useful for eyeballing, let's add it.
 
 # Data into DataFrame format
-df = pd.DataFrame({anattrib:[obj.get(anattrib, '') for obj in handler.objs] for anattrib in allattribs})
+numericcols = ['id', 'lat', 'lon', 'calc_area', 'calc_capacity']   # in some pandas versions, we must not provide '' in numeric columns else it up-casts them to object
+df = pd.DataFrame({anattrib:[obj.get(anattrib, ['', 0][anattrib in numericcols]) for obj in handler.objs] for anattrib in allattribs})
 
 pdf = PdfPages("plot_processed_PV_objects.pdf")
 
