@@ -198,6 +198,12 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 						if v=='rooftop':
 							v = 'roof'
 						curitem['location'] = v
+					elif k in ['source', 'source:geometry']:
+						curitem['source_obj'] = v.replace(",", ";")
+					elif k in ['source:generator:output:electricity', 'source:plant:output:electricity', "source:power:output", "source:output", "source:power"]:
+						if v=='REPD Open Data':
+							v = 'repd'
+						curitem['source_capacity'] = v.replace(",", ";")
 					elif k=='note':
 						if v=='roof household':
 							curitem['location'] = 'roof'
@@ -308,7 +314,7 @@ class SolarXMLHandler(sax.handler.ContentHandler):
 'survey:date',
 'opening_hours',
 	] or k.split(':')[0] in [
-'source',
+'source',  # NB there are lots of different source tags. Here we're suppressing any leftovers, even though we may use specific source tags already.
 'operator',
 'owner',
 'description',
